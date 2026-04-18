@@ -17,6 +17,10 @@ import {
   TrendingUp,
   Check,
   ArrowRight,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { type Message, type ChatResponse, type ChatAction } from "../api";
 import ChartRenderer from "./ChartRenderer";
@@ -48,9 +52,40 @@ export default function ChatPanel({ clientId, clientName, onSend, onBrief, seed 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastSeedNonce = useRef<number | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const sttSupported = typeof window !== "undefined" && (
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  );
+
+  const toggleListening = () => {
+    if (!sttSupported) return;
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const Ctor: any =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+    const recognition = new Ctor();
+    recognition.lang = "fr-FR";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.onresult = (e: any) => {
+      const transcript = Array.from(e.results)
+        .map((r: any) => r[0].transcript)
+        .join("");
+      setInput(transcript);
+    };
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  };
 
   useEffect(() => {
     setMessages([]);
@@ -282,6 +317,25 @@ export default function ChatPanel({ clientId, clientName, onSend, onBrief, seed 
               t.style.height = Math.min(t.scrollHeight, 128) + "px";
             }}
           />
+          {sttSupported && (
+            <button
+              type="button"
+              onClick={toggleListening}
+              disabled={!clientId || loading}
+              title={listening ? "Arrêter la dictée" : "Dicter un message"}
+              className={`m-1.5 w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-40 flex-shrink-0 ${
+                listening
+                  ? "bg-rose-500 text-white animate-pulse shadow-md"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              }`}
+            >
+              {listening ? (
+                <MicOff className="w-3.5 h-3.5" />
+              ) : (
+                <Mic className="w-3.5 h-3.5" />
+              )}
+            </button>
+          )}
           <button
             onClick={() => sendMessage(input)}
             disabled={!clientId || !input.trim() || loading}
@@ -301,6 +355,33 @@ export default function ChatPanel({ clientId, clientName, onSend, onBrief, seed 
 
 function MessageBubble({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === "user";
+  const [speaking, setSpeaking] = useState(false);
+  const ttsSupported =
+    typeof window !== "undefined" && "speechSynthesis" in window;
+
+  const toggleSpeak = () => {
+    if (!ttsSupported) return;
+    const synth = window.speechSynthesis;
+    if (speaking) {
+      synth.cancel();
+      setSpeaking(false);
+      return;
+    }
+    synth.cancel();
+    const cleaned = msg.content
+      .replace(/[*_#`]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const utter = new SpeechSynthesisUtterance(cleaned);
+    utter.lang = "fr-FR";
+    utter.rate = 1.05;
+    utter.pitch = 1;
+    utter.onend = () => setSpeaking(false);
+    utter.onerror = () => setSpeaking(false);
+    synth.speak(utter);
+    setSpeaking(true);
+  };
+
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}>
       <div
@@ -324,7 +405,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       </div>
       <div className={`flex flex-col max-w-[85%] min-w-0 ${isUser ? "items-end" : ""}`}>
         <div
-          className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
+          className={`relative rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm group ${
             isUser
               ? "text-white rounded-tr-sm"
               : msg.error
@@ -341,6 +422,24 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           }
         >
           <MarkdownText text={msg.content} />
+          {!isUser && !msg.error && ttsSupported && (
+            <button
+              type="button"
+              onClick={toggleSpeak}
+              title={speaking ? "Arrêter la lecture" : "Écouter la réponse"}
+              className={`absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center shadow-sm border transition-all opacity-0 group-hover:opacity-100 ${
+                speaking
+                  ? "bg-[#009E60] text-white border-transparent opacity-100"
+                  : "bg-white text-slate-500 border-slate-200 hover:text-[#009E60]"
+              }`}
+            >
+              {speaking ? (
+                <VolumeX className="w-3 h-3" />
+              ) : (
+                <Volume2 className="w-3 h-3" />
+              )}
+            </button>
+          )}
         </div>
         {msg.chart && <ChartRenderer chart={msg.chart} />}
         {!isUser && msg.actions && msg.actions.length > 0 && (

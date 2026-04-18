@@ -349,6 +349,237 @@ def meeting_brief(request: BriefRequest) -> dict:
     return result
 
 
+@app.get("/clients/{client_id}/benchmark")
+def get_benchmark(client_id: str) -> dict:
+    """
+    Compare a client's key metrics with the average of their archetype peers.
+    Returns deltas for: savings rate, wealth, performance, diversification, score.
+    """
+    ds = DataStore.instance()
+    profil_df = ds["profil"]
+    if client_id not in profil_df["client_id"].values:
+        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
+
+    row = profil_df[profil_df["client_id"] == client_id].iloc[0]
+    archetype = row["archetype"]
+    archetype_peers = profil_df[profil_df["archetype"] == archetype]["client_id"].tolist()
+    # If too few same-archetype peers, fall back to the full client base
+    if len([p for p in archetype_peers if p != client_id]) < 2:
+        peers_ids = profil_df["client_id"].tolist()
+        peer_scope = "tous les clients"
+    else:
+        peers_ids = archetype_peers
+        peer_scope = f"archétype '{archetype}'"
+
+    def _metrics_for(cid: str) -> dict:
+        contrats = ds["contrats"][ds["contrats"]["client_id"] == cid]
+        wealth = float(contrats["encours_eur"].fillna(0).sum())
+        nb_contracts = int(len(contrats))
+
+        flux = ds["flux"][ds["flux"]["client_id"] == cid].copy()
+        if flux.empty:
+            savings_rate = 0.0
+        else:
+            flux["date"] = pd.to_datetime(flux["date"])
+            flux = flux.sort_values("date").tail(12)
+            rev = float(flux["revenus_eur"].fillna(0).sum())
+            epg = float(flux["epargne_nette_eur"].fillna(0).sum())
+            savings_rate = (epg / rev * 100) if rev else 0.0
+
+        histo = ds["histo_valo"][ds["histo_valo"]["client_id"] == cid].copy()
+        histo = histo[histo["encours_eur"].notna()]
+        perf_12m = 0.0
+        if not histo.empty:
+            histo["date"] = pd.to_datetime(histo["date"])
+            grp = histo.groupby("date")["encours_eur"].sum().sort_index()
+            if len(grp) >= 13:
+                first = grp.iloc[-13]
+                last = grp.iloc[-1]
+                perf_12m = ((last / first) - 1) * 100 if first else 0.0
+
+        return {
+            "wealth": wealth,
+            "savings_rate": savings_rate,
+            "perf_12m": perf_12m,
+            "nb_contracts": nb_contracts,
+        }
+
+    client_metrics = _metrics_for(client_id)
+    peer_metrics_list = [
+        _metrics_for(pid) for pid in peers_ids if pid != client_id
+    ]
+
+    def _avg(key: str) -> float:
+        vals = [m[key] for m in peer_metrics_list if m[key] is not None]
+        return round(sum(vals) / len(vals), 2) if vals else 0.0
+
+    peer_avg = {
+        "wealth": _avg("wealth"),
+        "savings_rate": _avg("savings_rate"),
+        "perf_12m": _avg("perf_12m"),
+        "nb_contracts": _avg("nb_contracts"),
+    }
+
+    def _delta(client_val: float, peer_val: float) -> float:
+        if peer_val == 0:
+            return 0.0
+        return round((client_val - peer_val) / abs(peer_val) * 100, 1)
+
+    dimensions = [
+        {
+            "key": "wealth",
+            "label": "Patrimoine total",
+            "unit": "€",
+            "client_value": round(client_metrics["wealth"], 2),
+            "peer_avg": round(peer_avg["wealth"], 2),
+            "delta_pct": _delta(client_metrics["wealth"], peer_avg["wealth"]),
+        },
+        {
+            "key": "savings_rate",
+            "label": "Taux d'épargne",
+            "unit": "%",
+            "client_value": round(client_metrics["savings_rate"], 1),
+            "peer_avg": round(peer_avg["savings_rate"], 1),
+            "delta_pct": _delta(
+                client_metrics["savings_rate"], peer_avg["savings_rate"]
+            ),
+        },
+        {
+            "key": "perf_12m",
+            "label": "Performance 12 mois",
+            "unit": "%",
+            "client_value": round(client_metrics["perf_12m"], 1),
+            "peer_avg": round(peer_avg["perf_12m"], 1),
+            "delta_pct": _delta(client_metrics["perf_12m"], peer_avg["perf_12m"]),
+        },
+        {
+            "key": "nb_contracts",
+            "label": "Nombre de contrats",
+            "unit": "",
+            "client_value": client_metrics["nb_contracts"],
+            "peer_avg": round(peer_avg["nb_contracts"], 1),
+            "delta_pct": _delta(
+                client_metrics["nb_contracts"], peer_avg["nb_contracts"]
+            ),
+        },
+    ]
+
+    return {
+        "archetype": archetype,
+        "peer_scope": peer_scope,
+        "peers_count": len([p for p in peers_ids if p != client_id]),
+        "dimensions": dimensions,
+    }
+
+
+@app.get("/market-context")
+def market_context(months: int = 24) -> dict:
+    """
+    Return full market-index time series + latest performance summary.
+    Used by the Market page to overlay with client portfolio.
+    """
+    ds = DataStore.instance()
+    df = ds["indices"].copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date")
+
+    cutoff = df["date"].max() - pd.DateOffset(months=months)
+    df = df[df["date"] >= cutoff]
+
+    # Build merged series keyed by date with one column per index
+    pivot = df.pivot_table(
+        index="date", columns="code_indice", values="valeur", aggfunc="last"
+    ).sort_index()
+    # Normalize indices to base 100 for easy visual comparison
+    first = pivot.iloc[0]
+    normalized = pivot.divide(first).multiply(100)
+
+    series = []
+    for date, row in normalized.iterrows():
+        point = {"date": date.strftime("%Y-%m-%d")}
+        for col, val in row.items():
+            if pd.notna(val):
+                point[str(col)] = round(float(val), 2)
+        series.append(point)
+
+    # Latest value + 12m perf for each index
+    summary = []
+    labels_map = dict(zip(df["code_indice"], df["libelle_indice"]))
+    for code in pivot.columns:
+        col_series = pivot[code].dropna()
+        if len(col_series) < 2:
+            continue
+        last = col_series.iloc[-1]
+        first_val = col_series.iloc[0]
+        perf = ((last / first_val) - 1) * 100 if first_val else 0.0
+        summary.append(
+            {
+                "code": str(code),
+                "label": labels_map.get(code, str(code)),
+                "latest": round(float(last), 2),
+                "performance_pct": round(float(perf), 2),
+            }
+        )
+
+    return {"series": series, "summary": summary, "period_months": months}
+
+
+@app.get("/clients/{client_id}/supports-performance")
+def get_supports_performance(client_id: str, months: int = 24) -> dict:
+    """
+    Return time series + perf metrics for the investment supports (funds) held
+    by the given client, derived from sheets 06_Supports_Detenus and 08_Histo_VL_Supports.
+    """
+    ds = DataStore.instance()
+    if client_id not in ds["profil"]["client_id"].values:
+        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
+
+    supports = ds["supports"]
+    held = supports[supports["client_id"] == client_id] if "client_id" in supports.columns else supports
+    isins = held["isin"].dropna().unique().tolist() if "isin" in held.columns else []
+
+    vl = ds["histo_vl"].copy()
+    vl["date"] = pd.to_datetime(vl["date"])
+
+    cutoff = vl["date"].max() - pd.DateOffset(months=months)
+    vl = vl[vl["date"] >= cutoff]
+    if isins:
+        vl = vl[vl["isin"].isin(isins)]
+
+    perfs = []
+    series_by_isin: dict[str, list] = {}
+    for isin, grp in vl.groupby("isin"):
+        grp = grp.sort_values("date")
+        if len(grp) < 2:
+            continue
+        first = float(grp.iloc[0]["vl_eur"])
+        last = float(grp.iloc[-1]["vl_eur"])
+        perf_pct = ((last / first) - 1) * 100 if first else 0.0
+        libelle = grp.iloc[-1]["libelle"]
+        perfs.append(
+            {
+                "isin": isin,
+                "libelle": libelle,
+                "latest_vl": round(last, 2),
+                "performance_pct": round(perf_pct, 2),
+            }
+        )
+        series_by_isin[isin] = [
+            {
+                "date": r["date"].strftime("%Y-%m-%d"),
+                "vl": round(float(r["vl_eur"]), 2),
+            }
+            for _, r in grp.iterrows()
+        ]
+
+    perfs.sort(key=lambda p: p["performance_pct"], reverse=True)
+    return {
+        "period_months": months,
+        "supports": perfs,
+        "series_by_isin": series_by_isin,
+    }
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "clients_loaded": len(DataStore.instance().client_ids())}

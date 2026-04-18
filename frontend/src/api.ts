@@ -270,6 +270,78 @@ export async function sendChat(
   return res.json();
 }
 
+/* ---------- Benchmarks & Market ---------- */
+
+export interface BenchmarkDimension {
+  key: string;
+  label: string;
+  unit: string;
+  client_value: number;
+  peer_avg: number;
+  delta_pct: number;
+}
+
+export interface Benchmark {
+  archetype: string;
+  peer_scope: string;
+  peers_count: number;
+  dimensions: BenchmarkDimension[];
+}
+
+export interface MarketSummaryItem {
+  code: string;
+  label: string;
+  latest: number;
+  performance_pct: number;
+}
+
+export interface MarketSeriesPoint {
+  date: string;
+  [index_code: string]: string | number;
+}
+
+export interface MarketContext {
+  series: MarketSeriesPoint[];
+  summary: MarketSummaryItem[];
+  period_months: number;
+}
+
+export interface SupportPerf {
+  isin: string;
+  libelle: string;
+  latest_vl: number;
+  performance_pct: number;
+}
+
+export interface SupportsPerformance {
+  period_months: number;
+  supports: SupportPerf[];
+  series_by_isin: Record<string, { date: string; vl: number }[]>;
+}
+
+export async function fetchBenchmark(clientId: string): Promise<Benchmark> {
+  const res = await fetch(`${API_BASE}/clients/${clientId}/benchmark`);
+  if (!res.ok) throw new Error("Failed to fetch benchmark");
+  return res.json();
+}
+
+export async function fetchMarketContext(months = 24): Promise<MarketContext> {
+  const res = await fetch(`${API_BASE}/market-context?months=${months}`);
+  if (!res.ok) throw new Error("Failed to fetch market context");
+  return res.json();
+}
+
+export async function fetchSupportsPerformance(
+  clientId: string,
+  months = 24
+): Promise<SupportsPerformance> {
+  const res = await fetch(
+    `${API_BASE}/clients/${clientId}/supports-performance?months=${months}`
+  );
+  if (!res.ok) throw new Error("Failed to fetch supports performance");
+  return res.json();
+}
+
 export async function generateBrief(clientId: string): Promise<ChatResponse> {
   const res = await fetch(`${API_BASE}/meeting-brief`, {
     method: "POST",

@@ -1,11 +1,30 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Sparkles, User, Trash2, Loader2, FileText } from "lucide-react";
-import { type Message, type ChatResponse } from "../api";
+import {
+  Send,
+  Sparkles,
+  User,
+  Trash2,
+  Loader2,
+  FileText,
+  Calculator,
+  Shield,
+  Calendar,
+  Mail,
+  Phone,
+  RefreshCw,
+  Sliders,
+  PiggyBank,
+  TrendingUp,
+  Check,
+  ArrowRight,
+} from "lucide-react";
+import { type Message, type ChatResponse, type ChatAction } from "../api";
 import ChartRenderer from "./ChartRenderer";
 
 interface ChatMessage extends Message {
   id: string;
   chart?: ChatResponse["chart"];
+  actions?: ChatAction[] | null;
   toolCalls?: string[];
   error?: boolean;
 }
@@ -72,6 +91,7 @@ export default function ChatPanel({ clientId, clientName, onSend, onBrief, seed 
           role: "assistant",
           content: res.text,
           chart: res.chart ?? undefined,
+          actions: res.actions ?? null,
           toolCalls: res.tool_calls_made,
         },
       ]);
@@ -111,6 +131,7 @@ export default function ChatPanel({ clientId, clientName, onSend, onBrief, seed 
           role: "assistant",
           content: res.text,
           chart: res.chart ?? undefined,
+          actions: res.actions ?? null,
           toolCalls: res.tool_calls_made,
         },
       ]);
@@ -322,7 +343,120 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           <MarkdownText text={msg.content} />
         </div>
         {msg.chart && <ChartRenderer chart={msg.chart} />}
+        {!isUser && msg.actions && msg.actions.length > 0 && (
+          <ActionButtons actions={msg.actions} />
+        )}
       </div>
+    </div>
+  );
+}
+
+/* ---------- Proactive action buttons ---------- */
+
+const ACTION_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  calculator: Calculator,
+  shield: Shield,
+  calendar: Calendar,
+  "file-text": FileText,
+  sparkles: Sparkles,
+  mail: Mail,
+  phone: Phone,
+  "refresh-cw": RefreshCw,
+  sliders: Sliders,
+  "piggy-bank": PiggyBank,
+  "trending-up": TrendingUp,
+};
+
+const ACTION_STYLE: Record<
+  ChatAction["type"],
+  { icon: React.ComponentType<{ className?: string }>; gradient: string }
+> = {
+  simulate_loan: {
+    icon: Calculator,
+    gradient: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+  },
+  open_product: {
+    icon: PiggyBank,
+    gradient: "linear-gradient(135deg, #10b981 0%, #14b8a6 100%)",
+  },
+  schedule_meeting: {
+    icon: Calendar,
+    gradient: "linear-gradient(135deg, #f59e0b 0%, #fb923c 100%)",
+  },
+  send_document: {
+    icon: FileText,
+    gradient: "linear-gradient(135deg, #0ea5e9 0%, #22d3ee 100%)",
+  },
+  generate_proposition: {
+    icon: Sparkles,
+    gradient: "linear-gradient(135deg, #009E60 0%, #14b8a6 100%)",
+  },
+  contact_client: {
+    icon: Mail,
+    gradient: "linear-gradient(135deg, #ec4899 0%, #f472b6 100%)",
+  },
+  rebalance_portfolio: {
+    icon: RefreshCw,
+    gradient: "linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)",
+  },
+  update_risk_profile: {
+    icon: Sliders,
+    gradient: "linear-gradient(135deg, #64748b 0%, #94a3b8 100%)",
+  },
+};
+
+function ActionButtons({ actions }: { actions: ChatAction[] }) {
+  const [clicked, setClicked] = useState<Set<number>>(new Set());
+
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      {actions.map((action, i) => {
+        const style = ACTION_STYLE[action.type];
+        const Icon =
+          (action.icon && ACTION_ICON_MAP[action.icon]) ||
+          style?.icon ||
+          ArrowRight;
+        const gradient =
+          style?.gradient || "linear-gradient(135deg, #009E60, #14b8a6)";
+        const isClicked = clicked.has(i);
+
+        return (
+          <button
+            key={`${action.type}-${i}`}
+            type="button"
+            onClick={() =>
+              setClicked((prev) => {
+                const next = new Set(prev);
+                next.add(i);
+                return next;
+              })
+            }
+            className="group relative overflow-hidden flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-xl bg-white border border-slate-200 hover:border-transparent hover:shadow-md transition-all text-left"
+          >
+            <span
+              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-white shadow-sm"
+              style={{ background: gradient }}
+            >
+              {isClicked ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : (
+                <Icon className="w-3.5 h-3.5" />
+              )}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[13px] font-semibold text-slate-800 leading-tight truncate">
+                {action.label}
+              </span>
+              {action.product && (
+                <span className="block text-[10px] text-slate-400 leading-tight truncate">
+                  {action.product}
+                </span>
+              )}
+            </span>
+            <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+          </button>
+        );
+      })}
     </div>
   );
 }

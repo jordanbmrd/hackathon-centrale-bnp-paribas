@@ -68,6 +68,24 @@ export interface PortfolioPoint {
   total_eur: number;
 }
 
+export interface PortfolioContractMeta {
+  contrat_id: string;
+  libelle: string;
+  famille: string;
+  code_produit?: string;
+}
+
+export interface PortfolioDetailPoint {
+  date: string;
+  total_eur: number;
+  [contrat_id: string]: string | number;
+}
+
+export interface PortfolioDetail {
+  series: PortfolioDetailPoint[];
+  contracts_meta: PortfolioContractMeta[];
+}
+
 export interface Project {
   projet: string;
   horizon_annees: number;
@@ -135,6 +153,7 @@ export interface Dashboard {
     taux_epargne_12m_pct: number | null;
   };
   health_score: HealthScore;
+  portfolio_detail: PortfolioDetail;
   contracts: Contract[];
   portfolio_evolution: PortfolioPoint[];
   projects: Project[];
@@ -183,9 +202,27 @@ export interface Message {
   content: string;
 }
 
+export type ChatActionType =
+  | "simulate_loan"
+  | "open_product"
+  | "schedule_meeting"
+  | "send_document"
+  | "generate_proposition"
+  | "contact_client"
+  | "rebalance_portfolio"
+  | "update_risk_profile";
+
+export interface ChatAction {
+  label: string;
+  type: ChatActionType;
+  icon?: string | null;
+  product?: string | null;
+}
+
 export interface ChatResponse {
   text: string;
   chart: ChartData | null;
+  actions?: ChatAction[] | null;
   tool_calls_made: string[];
 }
 

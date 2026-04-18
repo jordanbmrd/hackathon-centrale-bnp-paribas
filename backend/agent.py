@@ -53,10 +53,34 @@ RÈGLES DE RÉPONSE — STRICTES :
 Utilise les outils pour récupérer les données AVANT de répondre.
 
 Si un graphique renforce la réponse (évolution, répartition, flux), ajoute un bloc JSON entre <chart> et </chart> :
-- Courbe : {"type": "line", "title": "...", "data": [{"date": "YYYY-MM", "value": 1234}, ...]}
-- Répartition : {"type": "pie", "title": "...", "data": [{"name": "...", "value": 1234}, ...]}
-- Barres : {"type": "bar", "title": "...", "dataKeys": ["revenus_eur", "depenses_eur", "epargne_nette_eur"], "data": [{"date": "YYYY-MM", "revenus_eur": 1234, ...}, ...]}
+- Courbe : {{"type": "line", "title": "...", "data": [{{"date": "YYYY-MM", "value": 1234}}, ...]}}
+- Répartition : {{"type": "pie", "title": "...", "data": [{{"name": "...", "value": 1234}}, ...]}}
+- Barres : {{"type": "bar", "title": "...", "dataKeys": ["revenus_eur", "depenses_eur", "epargne_nette_eur"], "data": [{{"date": "YYYY-MM", "revenus_eur": 1234, ...}}, ...]}}
 N'ajoute un graphique que s'il apporte une vraie valeur, sinon omets-le.
+
+BOUTONS D'ACTION — proactifs :
+Lorsque ta réponse évoque une opportunité concrète (projet de financement, ouverture de produit, RDV, rééquilibrage, document à envoyer, simulation, proposition), ajoute un bloc JSON entre <actions> et </actions> listant 1 à 3 boutons d'action contextuels :
+<actions>
+[
+  {{"label": "Simuler un crédit immobilier", "type": "simulate_loan", "icon": "calculator"}},
+  {{"label": "Proposer une assurance-vie", "type": "open_product", "icon": "shield", "product": "Assurance-vie"}},
+  {{"label": "Planifier un RDV", "type": "schedule_meeting", "icon": "calendar"}}
+]
+</actions>
+Types autorisés (choisis le plus pertinent) :
+- simulate_loan (icon: calculator) — simuler un prêt / financement
+- open_product (icon: shield | piggy-bank | trending-up) — proposer l'ouverture d'un produit (inclure un champ "product")
+- schedule_meeting (icon: calendar) — planifier un rendez-vous
+- send_document (icon: file-text) — envoyer un document / une plaquette
+- generate_proposition (icon: sparkles) — générer une proposition d'investissement
+- contact_client (icon: mail | phone) — contacter le client
+- rebalance_portfolio (icon: refresh-cw) — rééquilibrer l'allocation
+- update_risk_profile (icon: sliders) — mettre à jour le profil de risque
+Règles :
+- N'ajoute des boutons QUE si ta réponse crée clairement une opportunité d'action (sinon omets le bloc).
+- Max 3 boutons, le plus actionnable en premier.
+- Les libellés sont courts (max 32 caractères), à l'impératif ou à l'infinitif.
+- JAMAIS d'action inventée ou hors contexte BNP.
 """
 
 SPECIALIST_PROMPTS = {
@@ -207,10 +231,13 @@ def run_agent(
     )
     text = getattr(msg, "content", "") or ""
     chart = _extract_chart(text)
+    actions = _extract_actions(text)
     clean_text = _remove_chart_block(text)
+    clean_text = _remove_actions_block(clean_text)
     return {
         "text": clean_text,
         "chart": chart,
+        "actions": actions,
         "tool_calls_made": tool_calls_made + ["multi_agent_orchestration"],
     }
 
@@ -229,6 +256,53 @@ def _extract_chart(text: str) -> dict | None:
 def _remove_chart_block(text: str) -> str:
     """Remove <chart>...</chart> blocks from the text response."""
     return re.sub(r"\s*<chart>.*?</chart>\s*", "", text, flags=re.DOTALL).strip()
+
+
+_ALLOWED_ACTION_TYPES = {
+    "simulate_loan",
+    "open_product",
+    "schedule_meeting",
+    "send_document",
+    "generate_proposition",
+    "contact_client",
+    "rebalance_portfolio",
+    "update_risk_profile",
+}
+
+
+def _extract_actions(text: str) -> list[dict] | None:
+    """Parse JSON list of suggested action buttons from <actions>...</actions>."""
+    match = re.search(r"<actions>(.*?)</actions>", text, re.DOTALL)
+    if not match:
+        return None
+    try:
+        data = json.loads(match.group(1).strip())
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, list):
+        return None
+    cleaned: list[dict] = []
+    for item in data[:3]:
+        if not isinstance(item, dict):
+            continue
+        action_type = item.get("type")
+        label = (item.get("label") or "").strip()
+        if not label or action_type not in _ALLOWED_ACTION_TYPES:
+            continue
+        cleaned.append(
+            {
+                "label": label[:40],
+                "type": action_type,
+                "icon": item.get("icon") or None,
+                "product": item.get("product") or None,
+            }
+        )
+    return cleaned or None
+
+
+def _remove_actions_block(text: str) -> str:
+    """Remove <actions>...</actions> blocks from the text response."""
+    return re.sub(r"\s*<actions>.*?</actions>\s*", "", text, flags=re.DOTALL).strip()
 
 
 RADAR_PROMPT = """Tu es un expert en conseil patrimonial BNP Paribas, spécialisé dans la détection de signaux faibles.

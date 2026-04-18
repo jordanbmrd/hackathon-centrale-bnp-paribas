@@ -20,7 +20,7 @@ import ProjectsList from "./components/ProjectsList";
 import EventsTimeline from "./components/EventsTimeline";
 import ChatPanel from "./components/ChatPanel";
 import RadarPanel from "./components/RadarPanel";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Upload } from "lucide-react";
 
 export default function App() {
   const [clients, setClients] = useState<ClientSummary[]>([]);
@@ -129,7 +129,17 @@ export default function App() {
           />
         </div>
 
-        {selectedClient && (
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            title="Importer un CSV"
+            className="group flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm transition-all text-slate-600 hover:text-slate-800"
+          >
+            <Upload className="w-3.5 h-3.5 text-slate-500 group-hover:text-[#009E60]" />
+            Importer CSV
+          </button>
+
+          {selectedClient && (
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <div className="text-right">
               <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
@@ -147,7 +157,8 @@ export default function App() {
               <p className="font-semibold text-slate-700">{selectedClient.agence}</p>
             </div>
           </div>
-        )}
+          )}
+        </div>
       </header>
 
       {clientsError && (
@@ -191,7 +202,7 @@ export default function App() {
                   onRefresh={() => setRadarNonce((n) => n + 1)}
                   onAskQuestion={handleAskInChat}
                 />
-                <PortfolioChart data={dashboard.portfolio_evolution} />
+                <PortfolioChart detail={dashboard.portfolio_detail} />
                 <ProductsList
                   contracts={dashboard.contracts}
                   allocation={dashboard.allocation_by_asset_class}

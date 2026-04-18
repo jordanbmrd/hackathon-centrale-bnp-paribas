@@ -25,6 +25,63 @@ os.environ.setdefault("DATA_PATH", str(_here.parent / "data" / "banking_customer
 
 from agent import build_meeting_brief_prompt, generate_client_radar, run_agent  # noqa: E402
 from data_loader import DataStore  # noqa: E402
+import pandas as pd  # noqa: E402
+
+
+def _build_portfolio_detail(client_id: str) -> dict:
+    """
+    Return a richer portfolio series used by the dashboard chart :
+      - full monthly history (up to ~5 years)
+      - total + per-contract columns on each row
+      - metadata for each contract (label, family, color)
+    """
+    ds = DataStore.instance()
+
+    histo = ds["histo_valo"][ds["histo_valo"]["client_id"] == client_id].copy()
+    histo = histo[histo["encours_eur"].notna()]
+    if histo.empty:
+        return {"series": [], "contracts_meta": []}
+
+    histo["date"] = pd.to_datetime(histo["date"])
+    histo = histo.sort_values("date")
+
+    # Keep at most last 60 months (5 years)
+    cutoff = histo["date"].max() - pd.DateOffset(months=60)
+    histo = histo[histo["date"] >= cutoff]
+
+    contrats = ds["contrats"][ds["contrats"]["client_id"] == client_id]
+    meta_map = {
+        row["contrat_id"]: {
+            "contrat_id": row["contrat_id"],
+            "libelle": row.get("libelle_produit") or row["contrat_id"],
+            "famille": row.get("famille_produit") or "",
+            "code_produit": row.get("code_produit") or "",
+        }
+        for _, row in contrats.iterrows()
+    }
+
+    # Pivot : one column per contrat_id
+    pivot = histo.pivot_table(
+        index="date", columns="contrat_id", values="encours_eur", aggfunc="sum"
+    ).sort_index()
+    pivot = pivot.fillna(0.0)
+    pivot["total_eur"] = pivot.sum(axis=1)
+
+    series = []
+    for date, row in pivot.iterrows():
+        point = {"date": date.strftime("%Y-%m-%d")}
+        for col, val in row.items():
+            point[str(col)] = round(float(val), 2)
+        series.append(point)
+
+    # Only expose contracts that actually have data in the window
+    active_ids = [cid for cid in pivot.columns if cid != "total_eur"]
+    contracts_meta = [
+        meta_map.get(cid, {"contrat_id": cid, "libelle": cid, "famille": ""})
+        for cid in active_ids
+    ]
+
+    return {"series": series, "contracts_meta": contracts_meta}
 
 app = FastAPI(title="BNP Savings Agent API", version="1.0.0")
 
@@ -111,6 +168,7 @@ def get_dashboard(client_id: str) -> dict:
 
     contracts = get_contracts(client_id)
     portfolio = get_portfolio_evolution(client_id, months=24)
+    portfolio_detail = _build_portfolio_detail(client_id)
     flows = get_financial_flows(client_id)
     projects = get_projects(client_id)
     positions = get_investment_positions(client_id)
@@ -219,6 +277,7 @@ def get_dashboard(client_id: str) -> dict:
             "taux_epargne_12m_pct": taux_epargne_12m,
         },
         "health_score": health_score,
+        "portfolio_detail": portfolio_detail,
         "contracts": contracts_list,
         "portfolio_evolution": series,
         "projects": projects.get("projects", []),

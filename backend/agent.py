@@ -9,7 +9,7 @@ import os
 import re
 from typing import Any
 
-from mistralai.client import Mistral
+from mistralai import Mistral
 
 from tools import TOOL_DEFINITIONS, call_tool
 

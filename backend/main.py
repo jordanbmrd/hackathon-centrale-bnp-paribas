@@ -1,9 +1,11 @@
 """
 FastAPI backend for BNP Paribas Savings Agent Dashboard.
 Endpoints:
-  GET  /clients           — list of all clients with name + archetype
-  POST /chat              — send a message, get AI response + optional chart data
-  POST /meeting-brief     — generate a full meeting preparation brief
+  GET  /clients                    — list of all clients with name + archetype
+  GET  /clients/{id}/dashboard     — aggregated dashboard
+  GET  /clients/{id}/radar         — AI-generated advisor radar + meeting agenda
+  POST /chat                       — send a message, get AI response + optional chart data
+  POST /meeting-brief              — generate a full meeting preparation brief
 """
 from __future__ import annotations
 
@@ -139,6 +141,23 @@ def get_dashboard(client_id: str) -> dict:
         "events": events.get("events", []),
         "recent_flows": recent_flows,
     }
+
+
+@app.get("/clients/{client_id}/radar")
+def get_radar(client_id: str) -> dict:
+    """
+    Run the proactive advisor radar (insights + suggested meeting agenda) for one client.
+    """
+    if not os.environ.get("MISTRAL_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="MISTRAL_API_KEY not configured. Please add it to backend/.env",
+        )
+
+    result = generate_client_radar(client_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
 
 
 @app.post("/chat")

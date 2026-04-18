@@ -2,6 +2,10 @@
 
 Interface IA pour conseillers bancaires BNP Paribas. Permet d'interroger les données clients en langage naturel et d'obtenir des insights actionnables avant une réunion.
 
+![BNP Paribas](assets/bnp-paribas.png)
+
+![Centrale Nantes](assets/centrale-nantes.jpg)
+
 ## Prérequis
 
 - Python 3.11+

@@ -1,29 +1,38 @@
 """
-AI Agent: uses Mistral API (mistral-large-latest) with tool calling to answer advisor questions
-about banking clients. Returns a structured response with text + optional chart data.
+AI Agent with LangChain multi-agent orchestration.
+Specialists run in parallel, then a synthesizer returns concise advisor guidance
+with optional chart data.
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from mistralai.client import Mistral
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_mistralai import ChatMistralAI
 
-from tools import TOOL_DEFINITIONS, call_tool
+from tools import (
+    get_client_profile,
+    get_contracts,
+    get_events,
+    get_financial_flows,
+    get_investment_positions,
+    get_market_context,
+    get_portfolio_evolution,
+    get_projects,
+)
 
-_client: Mistral | None = None
 
-
-def _mistral() -> Mistral:
-    global _client
-    if _client is None:
-        _client = Mistral(
-            api_key=os.environ["MISTRAL_API_KEY"],
-            timeout_ms=120_000,  # 2 minutes — LLM responses can be slow
-        )
-    return _client
+def _llm(temperature: float = 0.2) -> ChatMistralAI:
+    return ChatMistralAI(
+        model="mistral-large-latest",
+        api_key=os.environ["MISTRAL_API_KEY"],
+        temperature=temperature,
+        timeout=120,
+    )
 
 
 SYSTEM_PROMPT = """Tu es un assistant IA expert en gestion de patrimoine pour les conseillers BNP Paribas.
@@ -50,13 +59,86 @@ Si un graphique renforce la réponse (évolution, répartition, flux), ajoute un
 N'ajoute un graphique que s'il apporte une vraie valeur, sinon omets-le.
 """
 
+SPECIALIST_PROMPTS = {
+    "profil": (
+        "Tu es l'agent spécialiste PROFIL CLIENT. "
+        "Tu analyses situation familiale, revenus, patrimoine, objectifs, événements. "
+        "Retourne 3 puces max, orientées diagnostic utile au conseiller."
+    ),
+    "allocation": (
+        "Tu es l'agent spécialiste ALLOCATION/INVESTISSEMENT. "
+        "Tu analyses contrats, positions, diversification, performance, risques de concentration. "
+        "Retourne 3 puces max avec chiffres précis."
+    ),
+    "actions": (
+        "Tu es l'agent spécialiste ACTIONS COMMERCIALES. "
+        "Tu proposes les meilleures actions de RDV: opportunités, vigilance, next step concret. "
+        "Retourne 3 puces max et 1 action recommandée."
+    ),
+}
+
+
+def _serialize_messages(messages: list[dict]) -> str:
+    lines: list[str] = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        lines.append(f"{role.upper()}: {content}")
+    return "\n".join(lines).strip()
+
+
+def _build_client_context(client_id: str) -> tuple[dict[str, Any], list[str]]:
+    context = {
+        "profile": get_client_profile(client_id),
+        "contracts": get_contracts(client_id),
+        "portfolio_evolution": get_portfolio_evolution(client_id, months=24),
+        "flows_last_24m": get_financial_flows(client_id),
+        "projects": get_projects(client_id),
+        "positions": get_investment_positions(client_id),
+        "events_last_24m": get_events(client_id, recent_months=24),
+        "market_context": get_market_context(months=12),
+    }
+    tool_calls = list(context.keys())
+    return context, tool_calls
+
+
+def _run_specialist(
+    specialist_name: str,
+    specialist_prompt: str,
+    conversation_text: str,
+    client_context_json: str,
+) -> str:
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", specialist_prompt),
+            (
+                "user",
+                "Conversation conseiller:\n{conversation_text}\n\n"
+                "Données client (JSON):\n{client_context_json}\n\n"
+                "Réponds en puces courtes et chiffrées.",
+            ),
+        ]
+    )
+    chain = prompt | _llm(temperature=0.1)
+    out = chain.invoke(
+        {
+            "conversation_text": conversation_text,
+            "client_context_json": client_context_json,
+        }
+    )
+    content = getattr(out, "content", "")
+    return f"[{specialist_name}] {content}".strip()
+
 
 def run_agent(
     messages: list[dict],
     client_id: str | None = None,
 ) -> dict[str, Any]:
     """
-    Run the agent loop with tool calling.
+    Run a LangChain multi-agent flow:
+    - Load client context via internal tools
+    - Execute specialist agents in parallel
+    - Synthesize a final concise advisor answer
 
     Args:
         messages: Full conversation history in chat format.
@@ -66,74 +148,70 @@ def run_agent(
         dict with keys:
             - text: str — the assistant's text response
             - chart: dict | None — parsed chart data if present
-            - tool_calls_made: list[str] — names of tools called
+            - tool_calls_made: list[str] — internal data calls made
     """
-    mistral = _mistral()
+    conversation_text = _serialize_messages(messages)
 
-    system_content = SYSTEM_PROMPT
-    if client_id:
-        system_content += f"\n\nClient actuellement sélectionné : {client_id}"
-
-    full_messages: list[dict] = [{"role": "system", "content": system_content}] + messages
-
+    context: dict[str, Any] = {}
     tool_calls_made: list[str] = []
-    max_iterations = 6
-
-    for _ in range(max_iterations):
-        response = mistral.chat.complete(
-            model="mistral-large-latest",
-            messages=full_messages,
-            tools=TOOL_DEFINITIONS,
-            tool_choice="auto",
-        )
-
-        msg = response.choices[0].message
-
-        if msg.tool_calls:
-            # Add the assistant message with tool calls to history
-            full_messages.append({
-                "role": "assistant",
-                "content": msg.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in msg.tool_calls
-                ],
-            })
-
-            for tc in msg.tool_calls:
-                tool_name = tc.function.name
-                tool_args = json.loads(tc.function.arguments)
-                tool_calls_made.append(tool_name)
-
-                result = call_tool(tool_name, tool_args)
-
-                full_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result,
-                })
-        else:
-            # Final answer
-            text = msg.content or ""
-            chart = _extract_chart(text)
-            clean_text = _remove_chart_block(text)
+    if client_id:
+        context, tool_calls_made = _build_client_context(client_id)
+        if "error" in (context.get("profile") or {}):
             return {
-                "text": clean_text,
-                "chart": chart,
+                "text": context["profile"]["error"],
+                "chart": None,
                 "tool_calls_made": tool_calls_made,
             }
 
+    context_json = json.dumps(context, ensure_ascii=False, default=str)
+
+    specialist_outputs: list[str] = []
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [
+            pool.submit(
+                _run_specialist,
+                name,
+                prompt,
+                conversation_text,
+                context_json,
+            )
+            for name, prompt in SPECIALIST_PROMPTS.items()
+        ]
+        for future in as_completed(futures):
+            try:
+                specialist_outputs.append(future.result())
+            except Exception as exc:  # noqa: BLE001
+                specialist_outputs.append(f"[specialist-error] {exc}")
+
+    synth_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", SYSTEM_PROMPT),
+            (
+                "user",
+                "Conversation conseiller:\n{conversation_text}\n\n"
+                "Client actuellement sélectionné : {client_id}\n\n"
+                "Analyses des agents spécialistes:\n{specialist_outputs}\n\n"
+                "Contexte client JSON:\n{context_json}\n\n"
+                "Produis la réponse finale selon les règles de format.",
+            ),
+        ]
+    )
+    chain = synth_prompt | _llm(temperature=0.2)
+    msg = chain.invoke(
+        {
+            "conversation_text": conversation_text,
+            "client_id": client_id or "Aucun",
+            "specialist_outputs": "\n".join(specialist_outputs),
+            "context_json": context_json,
+        }
+    )
+    text = getattr(msg, "content", "") or ""
+    chart = _extract_chart(text)
+    clean_text = _remove_chart_block(text)
     return {
-        "text": "Je n'ai pas pu obtenir une réponse complète après plusieurs tentatives.",
-        "chart": None,
-        "tool_calls_made": tool_calls_made,
+        "text": clean_text,
+        "chart": chart,
+        "tool_calls_made": tool_calls_made + ["multi_agent_orchestration"],
     }
 
 
@@ -207,16 +285,6 @@ def generate_client_radar(client_id: str) -> dict[str, Any]:
     Generate a proactive 'advisor radar' for one client:
     auto-detected insights + ready-to-use meeting agenda.
     """
-    from tools import (
-        get_client_profile,
-        get_contracts,
-        get_events,
-        get_financial_flows,
-        get_investment_positions,
-        get_portfolio_evolution,
-        get_projects,
-    )
-
     profile = get_client_profile(client_id)
     if "error" in profile:
         return {"error": profile["error"]}
@@ -231,17 +299,9 @@ def generate_client_radar(client_id: str) -> dict[str, Any]:
         "events_last_24m": get_events(client_id, recent_months=24),
     }
 
-    mistral = _mistral()
     prompt = RADAR_PROMPT.format(data=json.dumps(data, ensure_ascii=False, default=str))
-
-    response = mistral.chat.complete(
-        model="mistral-large-latest",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        temperature=0.4,
-    )
-
-    raw = response.choices[0].message.content or "{}"
+    response = _llm(temperature=0.4).invoke(prompt)
+    raw = getattr(response, "content", "") or "{}"
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:

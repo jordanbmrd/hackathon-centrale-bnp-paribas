@@ -91,7 +91,7 @@ export default function MarketPage({ clientId }: Props) {
           </div>
           <div>
             <h1
-              className="text-xl font-bold leading-tight"
+              className="text-lg sm:text-xl font-bold leading-tight"
               style={{ color: TEXT_DARK }}
             >
               Contexte de marché
@@ -136,7 +136,7 @@ export default function MarketPage({ clientId }: Props) {
       {market && (
         <>
           {/* Indices cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {market.summary.map((item) => {
               const positive = item.performance_pct >= 0;
               const active = selectedCodes.has(item.code);

@@ -78,3 +78,5 @@ data/
 - "Quels sont les points clés à aborder en réunion ?"
 - "La situation du client a-t-elle changé récemment ?"
 - "Quel produit pourrait être pertinent à proposer ?"
+
+<img width="1399" height="857" alt="image" src="https://github.com/user-attachments/assets/81ef7a99-2c15-4f3c-bd79-9f38a459493d" />

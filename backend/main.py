@@ -1,0 +1,190 @@
+"""
+FastAPI backend for BNP Paribas Savings Agent Dashboard.
+Endpoints:
+  GET  /clients           — list of all clients with name + archetype
+  POST /chat              — send a message, get AI response + optional chart data
+  POST /meeting-brief     — generate a full meeting preparation brief
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+load_dotenv()
+
+# Override DATA_PATH to absolute path relative to this file's location
+_here = Path(__file__).parent
+os.environ.setdefault("DATA_PATH", str(_here.parent / "data" / "banking_customers.xlsx"))
+
+from agent import build_meeting_brief_prompt, run_agent  # noqa: E402
+from data_loader import DataStore  # noqa: E402
+
+app = FastAPI(title="BNP Savings Agent API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ---------------------------------------------------------------------------
+# Startup: pre-load data
+# ---------------------------------------------------------------------------
+
+
+@app.on_event("startup")
+async def startup_event() -> None:
+    DataStore.instance()
+
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+
+
+class Message(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    client_id: str | None = None
+    messages: list[Message]
+
+
+class BriefRequest(BaseModel):
+    client_id: str
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+
+@app.get("/clients")
+def list_clients() -> list[dict]:
+    """Return all clients with their full name and archetype."""
+    ds = DataStore.instance()
+    return ds.clients_summary()
+
+
+@app.get("/clients/{client_id}")
+def get_client(client_id: str) -> dict:
+    """Return a single client's full profile."""
+    from tools import get_client_profile
+
+    result = get_client_profile(client_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@app.get("/clients/{client_id}/dashboard")
+def get_dashboard(client_id: str) -> dict:
+    """
+    Return a full aggregated dashboard for one client :
+    profile, KPIs, contracts, portfolio evolution, projects, events.
+    """
+    from tools import (
+        get_client_profile,
+        get_contracts,
+        get_portfolio_evolution,
+        get_financial_flows,
+        get_projects,
+        get_investment_positions,
+        get_events,
+    )
+
+    profile = get_client_profile(client_id)
+    if "error" in profile:
+        raise HTTPException(status_code=404, detail=profile["error"])
+
+    contracts = get_contracts(client_id)
+    portfolio = get_portfolio_evolution(client_id, months=24)
+    flows = get_financial_flows(client_id)
+    projects = get_projects(client_id)
+    positions = get_investment_positions(client_id)
+    events = get_events(client_id, recent_months=24)
+
+    # Compute a rolling 12-month savings rate from the most recent flows
+    recent_flows = flows.get("flux", [])[-12:]
+    recent_revenus = sum((f.get("revenus_eur") or 0) for f in recent_flows)
+    recent_epargne = sum((f.get("epargne_nette_eur") or 0) for f in recent_flows)
+    taux_epargne_12m = (
+        round(recent_epargne / recent_revenus * 100, 1) if recent_revenus else None
+    )
+
+    return {
+        "profile": profile,
+        "kpis": {
+            "patrimoine_total_eur": contracts.get("total_encours_eur", 0),
+            "performance_24m_pct": portfolio.get("performance_pct"),
+            "revenus_12m_eur": round(recent_revenus, 2) if recent_revenus else 0,
+            "epargne_12m_eur": round(recent_epargne, 2) if recent_epargne else 0,
+            "taux_epargne_12m_pct": taux_epargne_12m,
+        },
+        "contracts": contracts.get("contracts", []),
+        "portfolio_evolution": portfolio.get("series", []),
+        "projects": projects.get("projects", []),
+        "positions": positions.get("positions", []),
+        "allocation_by_asset_class": positions.get("allocation_by_asset_class", []),
+        "events": events.get("events", []),
+        "recent_flows": recent_flows,
+    }
+
+
+@app.post("/chat")
+def chat(request: ChatRequest) -> dict:
+    """
+    Run the AI agent for a given conversation.
+    Returns: { text, chart, tool_calls_made }
+    """
+    import traceback
+
+    print(f"[CHAT] request received: client_id={request.client_id}, msgs={len(request.messages)}", flush=True)
+
+    if not os.environ.get("MISTRAL_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="MISTRAL_API_KEY not configured. Please add it to backend/.env",
+        )
+
+    messages = [m.model_dump() for m in request.messages]
+    try:
+        result = run_agent(messages, client_id=request.client_id)
+        print(f"[CHAT] response ok: tool_calls={result.get('tool_calls_made')}", flush=True)
+        return result
+    except Exception as exc:
+        print(f"[CHAT] ERROR: {type(exc).__name__}: {exc}", flush=True)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}")
+
+
+@app.post("/meeting-brief")
+def meeting_brief(request: BriefRequest) -> dict:
+    """
+    Generate a full meeting preparation brief for a client.
+    Returns: { text, chart, tool_calls_made }
+    """
+    if not os.environ.get("MISTRAL_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="MISTRAL_API_KEY not configured. Please add it to backend/.env",
+        )
+
+    messages = build_meeting_brief_prompt(request.client_id)
+    result = run_agent(messages, client_id=request.client_id)
+    return result
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok", "clients_loaded": len(DataStore.instance().client_ids())}

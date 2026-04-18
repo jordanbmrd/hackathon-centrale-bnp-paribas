@@ -15,6 +15,7 @@ interface Props {
   clientName?: string;
   onSend: (messages: Message[], clientId: string | null) => Promise<ChatResponse>;
   onBrief: (clientId: string) => Promise<ChatResponse>;
+  seed?: { text: string; nonce: number } | null;
 }
 
 const SUGGESTIONS = [
@@ -24,16 +25,24 @@ const SUGGESTIONS = [
   "La situation a-t-elle changé récemment ?",
 ];
 
-export default function ChatPanel({ clientId, clientName, onSend, onBrief }: Props) {
+export default function ChatPanel({ clientId, clientName, onSend, onBrief, seed }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const lastSeedNonce = useRef<number | null>(null);
 
   useEffect(() => {
     setMessages([]);
   }, [clientId]);
+
+  useEffect(() => {
+    if (!seed || seed.nonce === lastSeedNonce.current) return;
+    lastSeedNonce.current = seed.nonce;
+    void sendMessage(seed.text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.nonce]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

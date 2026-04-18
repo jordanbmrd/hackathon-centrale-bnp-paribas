@@ -4,8 +4,10 @@ import {
   type Dashboard,
   type Message,
   type ChatResponse,
+  type Radar,
   fetchClients,
   fetchDashboard,
+  fetchRadar,
   sendChat,
   generateBrief,
 } from "./api";
@@ -17,6 +19,7 @@ import ProductsList from "./components/ProductsList";
 import ProjectsList from "./components/ProjectsList";
 import EventsTimeline from "./components/EventsTimeline";
 import ChatPanel from "./components/ChatPanel";
+import RadarPanel from "./components/RadarPanel";
 import { Loader2, AlertCircle } from "lucide-react";
 
 export default function App() {
@@ -28,6 +31,13 @@ export default function App() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [dashLoading, setDashLoading] = useState(false);
   const [dashError, setDashError] = useState<string | null>(null);
+
+  const [radar, setRadar] = useState<Radar | null>(null);
+  const [radarLoading, setRadarLoading] = useState(false);
+  const [radarError, setRadarError] = useState<string | null>(null);
+  const [radarNonce, setRadarNonce] = useState(0);
+
+  const [chatSeed, setChatSeed] = useState<{ text: string; nonce: number } | null>(null);
 
   useEffect(() => {
     fetchClients()
@@ -42,6 +52,7 @@ export default function App() {
   useEffect(() => {
     if (!selectedClientId) {
       setDashboard(null);
+      setRadar(null);
       return;
     }
     setDashLoading(true);
@@ -52,11 +63,28 @@ export default function App() {
       .finally(() => setDashLoading(false));
   }, [selectedClientId]);
 
+  useEffect(() => {
+    if (!selectedClientId) {
+      setRadar(null);
+      return;
+    }
+    setRadar(null);
+    setRadarLoading(true);
+    setRadarError(null);
+    fetchRadar(selectedClientId)
+      .then(setRadar)
+      .catch((e) => setRadarError(e.message))
+      .finally(() => setRadarLoading(false));
+  }, [selectedClientId, radarNonce]);
+
   const selectedClient = clients.find((c) => c.client_id === selectedClientId) ?? null;
 
   const handleChat = async (messages: Message[], clientId: string | null): Promise<ChatResponse> =>
     sendChat(messages, clientId);
   const handleBrief = async (clientId: string): Promise<ChatResponse> => generateBrief(clientId);
+  const handleAskInChat = (question: string) => {
+    setChatSeed({ text: question, nonce: Date.now() });
+  };
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
@@ -130,6 +158,14 @@ export default function App() {
               <div className="space-y-5">
                 <ProfileCard profile={dashboard.profile} />
                 <KPIGrid kpis={dashboard.kpis} />
+                <RadarPanel
+                  insights={radar?.insights ?? []}
+                  agenda={radar?.agenda ?? null}
+                  loading={radarLoading}
+                  error={radarError}
+                  onRefresh={() => setRadarNonce((n) => n + 1)}
+                  onAskQuestion={handleAskInChat}
+                />
                 <PortfolioChart data={dashboard.portfolio_evolution} />
                 <ProductsList
                   contracts={dashboard.contracts}
@@ -157,6 +193,7 @@ export default function App() {
             clientName={selectedClient ? `${selectedClient.prenom} ${selectedClient.nom}` : undefined}
             onSend={handleChat}
             onBrief={handleBrief}
+            seed={chatSeed}
           />
         </div>
       </div>

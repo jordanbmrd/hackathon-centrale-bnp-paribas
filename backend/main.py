@@ -21,7 +21,7 @@ load_dotenv()
 _here = Path(__file__).parent
 os.environ.setdefault("DATA_PATH", str(_here.parent / "data" / "banking_customers.xlsx"))
 
-from agent import build_meeting_brief_prompt, run_agent  # noqa: E402
+from agent import build_meeting_brief_prompt, generate_client_radar, run_agent  # noqa: E402
 from data_loader import DataStore  # noqa: E402
 
 app = FastAPI(title="BNP Savings Agent API", version="1.0.0")

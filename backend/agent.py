@@ -153,6 +153,111 @@ def _remove_chart_block(text: str) -> str:
     return re.sub(r"\s*<chart>.*?</chart>\s*", "", text, flags=re.DOTALL).strip()
 
 
+RADAR_PROMPT = """Tu es un expert en conseil patrimonial pour BNP Paribas, avec un œil aiguisé pour détecter ce que les conseillers ne voient pas au premier regard.
+
+Voici les données complètes du client :
+
+{data}
+
+Ta mission : analyser de manière PROACTIVE ce dossier et produire un "radar conseil" qui aide le conseiller à préparer son prochain rendez-vous.
+
+Retourne UNIQUEMENT un objet JSON valide (sans texte autour, sans balises markdown) avec EXACTEMENT cette structure :
+
+{{
+  "insights": [
+    {{
+      "id": "ins-1",
+      "type": "opportunite" | "risque" | "incoherence" | "evenement",
+      "priority": "haute" | "moyenne" | "basse",
+      "title": "titre court et percutant (max 70 caractères)",
+      "diagnostic": "1 à 2 phrases factuelles citant des chiffres précis ou des produits du dossier",
+      "suggested_action": "action concrète que le conseiller peut engager",
+      "question_to_ask": "question ouverte à poser au client pour qualifier le besoin",
+      "impact": "bénéfice attendu (patrimonial, fiscal, de risque, relationnel...)"
+    }}
+  ],
+  "agenda": {{
+    "duration_min": 30,
+    "objective": "phrase courte résumant l'objectif principal du RDV",
+    "opening_sentence": "phrase d'accroche naturelle pour démarrer le RDV",
+    "topics": [
+      {{
+        "title": "titre du sujet",
+        "duration_min": 10,
+        "key_points": ["point clé 1", "point clé 2"]
+      }}
+    ],
+    "documents_to_prepare": ["document ou support à préparer"],
+    "follow_up": "prochaine échéance ou action post-RDV"
+  }}
+}}
+
+RÈGLES STRICTES :
+- Entre 3 et 5 insights, triés par priorité décroissante.
+- Privilégie par ordre d'intérêt : les INCOHÉRENCES (ex : profil prudent + forte exposition actions, projet court terme + faible liquidité, concentration excessive d'un produit), les ÉVÉNEMENTS DE VIE récents, les OPPORTUNITÉS fiscales/patrimoniales, les RISQUES.
+- Chaque insight DOIT citer des données précises du dossier (montants, pourcentages, noms de produits, dates).
+- L'agenda tient en 30 minutes max, 3 à 4 sujets maximum.
+- Tout en français.
+- Ne renvoie RIEN d'autre que le JSON.
+"""
+
+
+def generate_client_radar(client_id: str) -> dict[str, Any]:
+    """
+    Generate a proactive 'advisor radar' for one client:
+    auto-detected insights + ready-to-use meeting agenda.
+    """
+    from tools import (
+        get_client_profile,
+        get_contracts,
+        get_events,
+        get_financial_flows,
+        get_investment_positions,
+        get_portfolio_evolution,
+        get_projects,
+    )
+
+    profile = get_client_profile(client_id)
+    if "error" in profile:
+        return {"error": profile["error"]}
+
+    data = {
+        "profile": profile,
+        "contracts": get_contracts(client_id),
+        "portfolio_evolution": get_portfolio_evolution(client_id, months=24),
+        "flows_last_24m": get_financial_flows(client_id),
+        "projects": get_projects(client_id),
+        "positions": get_investment_positions(client_id),
+        "events_last_24m": get_events(client_id, recent_months=24),
+    }
+
+    mistral = _mistral()
+    prompt = RADAR_PROMPT.format(data=json.dumps(data, ensure_ascii=False, default=str))
+
+    response = mistral.chat.complete(
+        model="mistral-large-latest",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        temperature=0.4,
+    )
+
+    raw = response.choices[0].message.content or "{}"
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        # Fallback: try to extract a JSON object from the text
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        parsed = json.loads(match.group(0)) if match else {"insights": [], "agenda": None}
+
+    # Normalize & cap
+    insights = parsed.get("insights") or []
+    if isinstance(insights, list):
+        insights = insights[:5]
+    parsed["insights"] = insights
+    parsed.setdefault("agenda", None)
+    return parsed
+
+
 def build_meeting_brief_prompt(client_id: str) -> list[dict]:
     """Return messages that instruct the agent to produce a full meeting brief."""
     return [

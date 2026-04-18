@@ -125,6 +125,40 @@ export interface Dashboard {
   recent_flows: FlowPoint[];
 }
 
+export type InsightType = "opportunite" | "risque" | "incoherence" | "evenement";
+export type InsightPriority = "haute" | "moyenne" | "basse";
+
+export interface Insight {
+  id: string;
+  type: InsightType;
+  priority: InsightPriority;
+  title: string;
+  diagnostic: string;
+  suggested_action: string;
+  question_to_ask: string;
+  impact: string;
+}
+
+export interface AgendaTopic {
+  title: string;
+  duration_min: number;
+  key_points: string[];
+}
+
+export interface Agenda {
+  duration_min: number;
+  objective: string;
+  opening_sentence: string;
+  topics: AgendaTopic[];
+  documents_to_prepare: string[];
+  follow_up: string;
+}
+
+export interface Radar {
+  insights: Insight[];
+  agenda: Agenda | null;
+}
+
 export interface Message {
   role: "user" | "assistant";
   content: string;
@@ -152,6 +186,15 @@ export async function fetchClients(): Promise<ClientSummary[]> {
 export async function fetchDashboard(clientId: string): Promise<Dashboard> {
   const res = await fetch(`${API_BASE}/clients/${clientId}/dashboard`);
   if (!res.ok) throw new Error("Failed to fetch dashboard");
+  return res.json();
+}
+
+export async function fetchRadar(clientId: string): Promise<Radar> {
+  const res = await fetch(`${API_BASE}/clients/${clientId}/radar`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+    throw new Error(err.detail || "Radar request failed");
+  }
   return res.json();
 }
 

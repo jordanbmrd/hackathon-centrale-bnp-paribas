@@ -178,7 +178,10 @@ export default function App() {
 
             {!dashLoading && !dashError && dashboard && (
               <div className="space-y-6">
-                <ProfileCard profile={dashboard.profile} />
+                <ProfileCard
+                  profile={dashboard.profile}
+                  healthScore={dashboard.health_score}
+                />
                 <KPIGrid kpis={dashboard.kpis} />
                 <RadarPanel
                   insights={radar?.insights ?? []}

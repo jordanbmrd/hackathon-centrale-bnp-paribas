@@ -124,6 +124,91 @@ def get_dashboard(client_id: str) -> dict:
         round(recent_epargne / recent_revenus * 100, 1) if recent_revenus else None
     )
 
+    # Compute health score (0 - 100) across 4 dimensions
+    contracts_list = contracts.get("contracts", [])
+
+    # Épargne (max 25) : taux d'épargne >= 20% = 25
+    score_epargne = min(25.0, max(0.0, (taux_epargne_12m or 0) / 20.0 * 25.0))
+
+    # Performance sur 12 derniers mois (max 25) : rendement >= 7.5% = 25
+    series = portfolio.get("series", [])
+    last_12 = series[-13:] if len(series) >= 13 else series
+    perf_12m_pct = 0.0
+    if len(last_12) >= 2 and last_12[0].get("total_eur"):
+        perf_12m_pct = (
+            (last_12[-1]["total_eur"] / last_12[0]["total_eur"]) - 1
+        ) * 100
+    score_performance = min(25.0, max(0.0, perf_12m_pct / 7.5 * 25.0))
+
+    # Endettement (max 25) : 0% dette = 25 pts
+    debt_keywords = ("crédit", "credit", "prêt", "pret", "dette", "emprunt")
+    has_debt = any(
+        any(k in (c.get("famille_produit") or "").lower() for k in debt_keywords)
+        for c in contracts_list
+    )
+    score_endettement = 25.0 if not has_debt else 10.0
+
+    # Diversification (max 25) : 5+ contrats actifs = 25 pts
+    nb_contracts = sum(
+        1 for c in contracts_list if (c.get("statut") or "").lower() in ("actif", "ouvert", "en cours")
+    )
+    if nb_contracts == 0:
+        nb_contracts = len(contracts_list)
+    score_diversification = min(25.0, nb_contracts / 5.0 * 25.0)
+
+    total_score = round(
+        score_epargne + score_performance + score_endettement + score_diversification
+    )
+
+    if total_score >= 85:
+        grade, color = "A", "green"
+    elif total_score >= 70:
+        grade, color = "B", "green"
+    elif total_score >= 55:
+        grade, color = "C", "amber"
+    elif total_score >= 40:
+        grade, color = "D", "amber"
+    elif total_score >= 25:
+        grade, color = "E", "red"
+    else:
+        grade, color = "F", "red"
+
+    health_score = {
+        "score": total_score,
+        "grade": grade,
+        "color": color,
+        "dimensions": [
+            {
+                "name": "Épargne",
+                "score": round(score_epargne),
+                "max": 25,
+                "value": f"{taux_epargne_12m:.1f} %" if taux_epargne_12m is not None else "—",
+                "target": "≥ 20 %",
+            },
+            {
+                "name": "Performance",
+                "score": round(score_performance),
+                "max": 25,
+                "value": f"{perf_12m_pct:+.1f} %",
+                "target": "≥ 7,5 %",
+            },
+            {
+                "name": "Endettement",
+                "score": round(score_endettement),
+                "max": 25,
+                "value": "Aucun crédit" if not has_debt else "Crédit actif",
+                "target": "0 % de dette",
+            },
+            {
+                "name": "Diversification",
+                "score": round(score_diversification),
+                "max": 25,
+                "value": f"{nb_contracts} contrat{'s' if nb_contracts > 1 else ''}",
+                "target": "≥ 5 contrats",
+            },
+        ],
+    }
+
     return {
         "profile": profile,
         "kpis": {
@@ -133,8 +218,9 @@ def get_dashboard(client_id: str) -> dict:
             "epargne_12m_eur": round(recent_epargne, 2) if recent_epargne else 0,
             "taux_epargne_12m_pct": taux_epargne_12m,
         },
-        "contracts": contracts.get("contracts", []),
-        "portfolio_evolution": portfolio.get("series", []),
+        "health_score": health_score,
+        "contracts": contracts_list,
+        "portfolio_evolution": series,
         "projects": projects.get("projects", []),
         "positions": positions.get("positions", []),
         "allocation_by_asset_class": positions.get("allocation_by_asset_class", []),

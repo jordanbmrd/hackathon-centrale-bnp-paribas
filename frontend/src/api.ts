@@ -107,6 +107,24 @@ export interface FlowPoint {
   epargne_nette_eur: number;
 }
 
+export type HealthGrade = "A" | "B" | "C" | "D" | "E" | "F";
+export type HealthColor = "green" | "amber" | "red";
+
+export interface HealthDimension {
+  name: string;
+  score: number;
+  max: number;
+  value: string;
+  target: string;
+}
+
+export interface HealthScore {
+  score: number;
+  grade: HealthGrade;
+  color: HealthColor;
+  dimensions: HealthDimension[];
+}
+
 export interface Dashboard {
   profile: ClientProfile;
   kpis: {
@@ -116,6 +134,7 @@ export interface Dashboard {
     epargne_12m_eur: number;
     taux_epargne_12m_pct: number | null;
   };
+  health_score: HealthScore;
   contracts: Contract[];
   portfolio_evolution: PortfolioPoint[];
   projects: Project[];

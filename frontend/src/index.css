@@ -22,6 +22,45 @@
   to   { transform: translateX(0); }
 }
 
+@keyframes breathe {
+  0%, 100% { transform: scale(1) translateZ(0); filter: drop-shadow(0 10px 40px rgba(16, 185, 129, 0.28)); }
+  50%      { transform: scale(1.035) translateZ(0); filter: drop-shadow(0 18px 55px rgba(16, 185, 129, 0.48)); }
+}
+
+/* Intro splash — one continuous animation, no frozen hold phase */
+@keyframes introZoom {
+  0% {
+    transform: scale(0.7) translateZ(0);
+    opacity: 0;
+    filter: blur(8px) drop-shadow(0 10px 40px rgba(16, 185, 129, 0.25));
+  }
+  18% {
+    transform: scale(1) translateZ(0);
+    opacity: 1;
+    filter: blur(0px) drop-shadow(0 12px 45px rgba(16, 185, 129, 0.35));
+  }
+  45% {
+    transform: scale(1.08) translateZ(0);
+    opacity: 1;
+    filter: blur(0px) drop-shadow(0 18px 55px rgba(16, 185, 129, 0.5));
+  }
+  70% {
+    transform: scale(2.2) translateZ(0);
+    opacity: 1;
+    filter: blur(2px) drop-shadow(0 24px 70px rgba(16, 185, 129, 0.55));
+  }
+  100% {
+    transform: scale(20) translateZ(0);
+    opacity: 0;
+    filter: blur(24px);
+  }
+}
+
+@keyframes introFade {
+  0%, 60% { opacity: 1; }
+  100%    { opacity: 0; }
+}
+
 @layer components {
   .scrollbar-thin {
     scrollbar-width: thin;

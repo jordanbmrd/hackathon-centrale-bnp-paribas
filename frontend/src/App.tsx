@@ -13,6 +13,7 @@ import {
 } from "./api";
 import ClientSelector from "./components/ClientSelector";
 import ChatPanel from "./components/ChatPanel";
+import IntroSplash from "./components/IntroSplash";
 import Sidebar, { type PageId, SIDEBAR_ITEMS } from "./components/Sidebar";
 import DashboardPage from "./pages/DashboardPage";
 import SimulatorPage from "./pages/SimulatorPage";
@@ -39,6 +40,7 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false);
 
   const [activePage, setActivePage] = useState<PageId>("dashboard");
+  const [introDone, setIntroDone] = useState(false);
 
   useEffect(() => {
     fetchClients()
@@ -98,6 +100,8 @@ export default function App() {
           "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #eef2f7 100%)",
       }}
     >
+      {!introDone && <IntroSplash onDone={() => setIntroDone(true)} />}
+
       {/* Sidebar */}
       <Sidebar active={activePage} onChange={setActivePage} />
 

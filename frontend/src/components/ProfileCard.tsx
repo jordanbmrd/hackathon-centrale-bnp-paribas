@@ -10,9 +10,15 @@ export default function ProfileCard({ profile }: Props) {
   const foyer = profile.foyer;
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-6">
+    <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
       <div className="flex items-start gap-5">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#009E60]/15 to-[#009E60]/5 text-[#009E60] flex items-center justify-center text-lg font-semibold flex-shrink-0">
+        <div
+          className="w-14 h-14 rounded-2xl text-white flex items-center justify-center text-lg font-bold flex-shrink-0 shadow-md"
+          style={{
+            background:
+              "linear-gradient(135deg, #009E60 0%, #14B8A6 100%)",
+          }}
+        >
           {getInitials(profile.prenom, profile.nom)}
         </div>
 
@@ -24,14 +30,22 @@ export default function ProfileCard({ profile }: Props) {
             <span className="text-sm text-slate-500">{profile.age} ans</span>
           </div>
 
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <span className="inline-flex items-center text-xs font-medium text-[#009E60] bg-[#009E60]/10 px-2 py-0.5 rounded-full">
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span
+              className="inline-flex items-center text-xs font-semibold text-white px-2.5 py-0.5 rounded-full shadow-sm"
+              style={{
+                background:
+                  "linear-gradient(135deg, #009E60 0%, #14B8A6 100%)",
+              }}
+            >
               {profile.archetype}
             </span>
-            <span className="text-xs text-slate-400">·</span>
-            <span className="text-xs text-slate-500">{profile.etape_vie}</span>
-            <span className="text-xs text-slate-400">·</span>
-            <span className="text-xs text-slate-500">{profile.segmentation}</span>
+            <span className="inline-flex items-center text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+              {profile.etape_vie}
+            </span>
+            <span className="inline-flex items-center text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+              {profile.segmentation}
+            </span>
           </div>
         </div>
       </div>

@@ -7,15 +7,15 @@ interface Props {
 }
 
 const PRIORITY_STYLES: Record<string, string> = {
-  Haute: "bg-rose-50 text-rose-700 border-rose-100",
-  Moyenne: "bg-amber-50 text-amber-700 border-amber-100",
+  Haute: "bg-gradient-to-r from-amber-500 to-orange-500 text-white border-transparent",
+  Moyenne: "bg-gradient-to-r from-sky-400 to-cyan-400 text-white border-transparent",
   Basse: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
 export default function ProjectsList({ projects }: Props) {
   if (!projects || projects.length === 0) {
     return (
-      <section className="bg-white rounded-2xl border border-slate-200 p-6">
+      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-700 mb-3">Projets & objectifs</h2>
         <p className="text-sm text-slate-400">Aucun projet déclaré.</p>
       </section>
@@ -28,7 +28,7 @@ export default function ProjectsList({ projects }: Props) {
   });
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-6">
+    <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
       <div className="flex items-baseline justify-between mb-5">
         <h2 className="text-sm font-semibold text-slate-700">Projets & objectifs</h2>
         <span className="text-xs text-slate-400">{projects.length} projet(s)</span>
@@ -40,7 +40,7 @@ export default function ProjectsList({ projects }: Props) {
             key={i}
             className="flex items-start gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#009E60]/10 text-[#009E60] flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#009E60] to-teal-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
               <Target className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">

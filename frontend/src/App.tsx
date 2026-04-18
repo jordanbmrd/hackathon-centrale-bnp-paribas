@@ -87,16 +87,32 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
+    <div
+      className="flex flex-col h-screen overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #eef2f7 100%)",
+      }}
+    >
       {/* Top bar */}
-      <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 flex-shrink-0">
+      <header className="relative flex items-center justify-between px-6 py-3 bg-white/80 backdrop-blur-md border-b border-slate-200 flex-shrink-0 z-10">
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-[#009E60] rounded-lg flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold tracking-tight">BNP</span>
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md"
+              style={{
+                background:
+                  "linear-gradient(135deg, #009E60 0%, #14B8A6 100%)",
+              }}
+            >
+              <span className="text-white text-[11px] font-bold tracking-tight">
+                BNP
+              </span>
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-slate-900 leading-tight">Savings Agent</h1>
+              <h1 className="text-sm font-bold text-slate-900 leading-tight">
+                Savings Agent
+              </h1>
               <p className="text-[11px] text-slate-500 leading-tight">
                 Dashboard conseiller
               </p>
@@ -116,20 +132,26 @@ export default function App() {
         {selectedClient && (
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <div className="text-right">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Conseiller</p>
-              <p className="font-medium text-slate-700">{selectedClient.conseiller_attitre}</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                Conseiller
+              </p>
+              <p className="font-semibold text-slate-700">
+                {selectedClient.conseiller_attitre}
+              </p>
             </div>
             <div className="h-7 w-px bg-slate-200" />
             <div className="text-right">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Agence</p>
-              <p className="font-medium text-slate-700">{selectedClient.agence}</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                Agence
+              </p>
+              <p className="font-semibold text-slate-700">{selectedClient.agence}</p>
             </div>
           </div>
         )}
       </header>
 
       {clientsError && (
-        <div className="bg-rose-50 border-b border-rose-100 px-6 py-2 text-sm text-rose-700 flex items-center gap-2">
+        <div className="bg-amber-50 border-b border-amber-100 px-6 py-2 text-sm text-amber-800 flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
           {clientsError}. Vérifiez que le backend tourne sur http://127.0.0.1:8000.
         </div>
@@ -139,7 +161,7 @@ export default function App() {
       <div className="flex-1 flex overflow-hidden">
         {/* Dashboard area */}
         <main className="flex-1 overflow-y-auto scrollbar-thin">
-          <div className="max-w-[1100px] mx-auto px-6 py-6">
+          <div className="max-w-[1200px] mx-auto px-8 py-8">
             {dashLoading && (
               <div className="flex items-center justify-center py-20 text-slate-400">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -148,14 +170,14 @@ export default function App() {
             )}
 
             {dashError && (
-              <div className="bg-rose-50 border border-rose-100 rounded-xl p-4 text-sm text-rose-700 flex items-center gap-2">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
                 {dashError}
               </div>
             )}
 
             {!dashLoading && !dashError && dashboard && (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <ProfileCard profile={dashboard.profile} />
                 <KPIGrid kpis={dashboard.kpis} />
                 <RadarPanel
@@ -171,26 +193,31 @@ export default function App() {
                   contracts={dashboard.contracts}
                   allocation={dashboard.allocation_by_asset_class}
                 />
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <ProjectsList projects={dashboard.projects} />
                   <EventsTimeline events={dashboard.events} />
                 </div>
+                <div className="h-4" />
               </div>
             )}
 
             {!dashLoading && !dashboard && !dashError && clients.length > 0 && (
               <div className="text-center py-20 text-slate-400">
-                <p className="text-sm">Sélectionnez un client pour afficher son dossier.</p>
+                <p className="text-sm">
+                  Sélectionnez un client pour afficher son dossier.
+                </p>
               </div>
             )}
           </div>
         </main>
 
         {/* Chat panel */}
-        <div className="w-[380px] flex-shrink-0">
+        <div className="w-[400px] flex-shrink-0 shadow-[-8px_0_24px_-12px_rgba(15,23,42,0.08)]">
           <ChatPanel
             clientId={selectedClientId}
-            clientName={selectedClient ? `${selectedClient.prenom} ${selectedClient.nom}` : undefined}
+            clientName={
+              selectedClient ? `${selectedClient.prenom} ${selectedClient.nom}` : undefined
+            }
             onSend={handleChat}
             onBrief={handleBrief}
             seed={chatSeed}

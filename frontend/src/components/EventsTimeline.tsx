@@ -7,8 +7,8 @@ interface Props {
 }
 
 const CRITICITE_STYLES: Record<string, string> = {
-  Important: "text-rose-600 bg-rose-50",
-  Info: "text-slate-500 bg-slate-50",
+  Important: "text-white bg-gradient-to-br from-amber-500 to-orange-500 shadow-sm",
+  Info: "text-slate-500 bg-slate-100",
 };
 
 function getIcon(type: string, criticite: string) {
@@ -21,7 +21,7 @@ function getIcon(type: string, criticite: string) {
 export default function EventsTimeline({ events }: Props) {
   if (!events || events.length === 0) {
     return (
-      <section className="bg-white rounded-2xl border border-slate-200 p-6">
+      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-700 mb-3">Événements récents</h2>
         <p className="text-sm text-slate-400">Aucun événement récent.</p>
       </section>
@@ -31,7 +31,7 @@ export default function EventsTimeline({ events }: Props) {
   const recent = events.slice(0, 8);
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-6">
+    <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
       <div className="flex items-baseline justify-between mb-5">
         <h2 className="text-sm font-semibold text-slate-700">Événements récents</h2>
         <span className="text-xs text-slate-400">{events.length} au total</span>

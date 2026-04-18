@@ -17,7 +17,7 @@ interface Props {
 export default function PortfolioChart({ data }: Props) {
   if (!data || data.length === 0) {
     return (
-      <section className="bg-white rounded-2xl border border-slate-200 p-6">
+      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-700">Évolution du patrimoine</h2>
         <p className="text-sm text-slate-400 mt-3">Aucune donnée disponible.</p>
       </section>
@@ -25,7 +25,7 @@ export default function PortfolioChart({ data }: Props) {
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-6">
+    <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
       <div className="flex items-baseline justify-between mb-5">
         <h2 className="text-sm font-semibold text-slate-700">Évolution du patrimoine</h2>
         <span className="text-xs text-slate-400">24 derniers mois</span>

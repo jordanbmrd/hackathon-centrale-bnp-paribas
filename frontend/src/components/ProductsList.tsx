@@ -22,7 +22,7 @@ export default function ProductsList({ contracts, allocation }: Props) {
   );
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-6">
+    <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
       <div className="flex items-baseline justify-between mb-5">
         <h2 className="text-sm font-semibold text-slate-700">Produits détenus</h2>
         <span className="text-xs text-slate-400">

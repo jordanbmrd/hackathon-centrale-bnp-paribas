@@ -143,10 +143,10 @@ export default function SimulatorPage({ dashboard }: Props) {
         </div>
         <div>
           <h1
-            className="text-xl font-bold leading-tight"
+            className="text-lg sm:text-xl font-bold leading-tight"
             style={{ color: TEXT_DARK }}
           >
-            Simulateur d'évolution du patrimoine
+            Simulateur d'évolution
           </h1>
           <p className="text-xs text-slate-500 leading-tight">
             Projetez le patrimoine de {dashboard?.profile.prenom}{" "}

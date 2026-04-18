@@ -35,30 +35,30 @@ export default function ClientSelector({ clients, selectedId, onSelect, loading 
   });
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative w-full sm:w-auto">
       <button
         onClick={() => setOpen(!open)}
         disabled={loading}
-        className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-3 py-2 hover:border-slate-300 transition-colors min-w-[280px] text-left"
+        className="w-full flex items-center gap-2 sm:gap-3 bg-white border border-slate-200 rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 hover:border-slate-300 transition-colors sm:min-w-[280px] text-left"
       >
         {selected ? (
           <>
-            <div className="w-9 h-9 rounded-full bg-[#009E60]/10 text-[#009E60] flex items-center justify-center text-xs font-semibold flex-shrink-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#009E60]/10 text-[#009E60] flex items-center justify-center text-xs font-semibold flex-shrink-0">
               {getInitials(selected.prenom, selected.nom)}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-slate-900 truncate leading-tight">
                 {selected.prenom} {selected.nom}
               </p>
-              <p className="text-xs text-slate-500 truncate leading-tight">{selected.archetype}</p>
+              <p className="text-[11px] sm:text-xs text-slate-500 truncate leading-tight">{selected.archetype}</p>
             </div>
           </>
         ) : (
-          <span className="text-sm text-slate-500 flex-1">
+          <span className="text-sm text-slate-500 flex-1 truncate">
             {loading ? "Chargement…" : "Sélectionner un client"}
           </span>
         )}
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (

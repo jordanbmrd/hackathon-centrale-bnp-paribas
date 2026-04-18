@@ -59,7 +59,7 @@ export default function BenchmarkPage({ clientId }: Props) {
         </div>
         <div>
           <h1
-            className="text-xl font-bold leading-tight"
+            className="text-lg sm:text-xl font-bold leading-tight"
             style={{ color: TEXT_DARK }}
           >
             Positionnement du client

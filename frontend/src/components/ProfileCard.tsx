@@ -27,12 +27,12 @@ export default function ProfileCard({ profile, healthScore }: Props) {
   const foyer = profile.foyer;
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+    <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm">
       {/* Top row : identity + health score */}
-      <div className="flex items-start justify-between gap-6 flex-wrap">
-        <div className="flex items-start gap-5 min-w-0 flex-1">
+      <div className="flex items-start justify-between gap-4 sm:gap-6 flex-wrap">
+        <div className="flex items-start gap-3 sm:gap-5 min-w-0 flex-1">
           <div
-            className="w-16 h-16 rounded-2xl text-white flex items-center justify-center text-xl font-bold flex-shrink-0 shadow-md"
+            className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl text-white flex items-center justify-center text-lg sm:text-xl font-bold flex-shrink-0 shadow-md"
             style={{
               background: "linear-gradient(135deg, #009E60 0%, #14B8A6 100%)",
             }}
@@ -204,12 +204,12 @@ function HealthScoreCard({ data }: { data: HealthScore }) {
   }, [open]);
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div ref={wrapperRef} className="relative w-full sm:w-auto sm:min-w-[240px]">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`group relative overflow-hidden rounded-xl px-3 py-2 text-left text-white shadow-md ring-2 ${ring} transition-all hover:shadow-lg`}
-        style={{ background: gradient, minWidth: 240 }}
+        className={`w-full group relative overflow-hidden rounded-xl px-3 py-2 text-left text-white shadow-md ring-2 ${ring} transition-all hover:shadow-lg`}
+        style={{ background: gradient }}
         title="Cliquez pour voir le détail"
       >
         <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-white/20 blur-2xl" />
@@ -257,7 +257,7 @@ function HealthScoreCard({ data }: { data: HealthScore }) {
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl p-3 shadow-xl space-y-2.5 z-30">
+        <div className="absolute top-full right-0 left-0 sm:left-auto mt-2 w-full sm:w-80 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-xl p-3 shadow-xl space-y-2.5 z-30">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <span
               className="text-xs font-semibold uppercase tracking-wider"
